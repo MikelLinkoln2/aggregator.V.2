@@ -29,13 +29,6 @@ TOKEN_PRICE_USD = {
 }
 DEFAULT_NEWS = [
     {
-        'id': 1,
-        'title': 'Aggregator запущен в демо-режиме',
-        'summary': 'Добавили вкладки Swap, Deposit, News и Admin Profile для курсового проекта.',
-        'date': '2026-02-04',
-        'category': 'Product'
-    },
-    {
         'id': 2,
         'title': 'Админ-профиль теперь видит 25 пользователей',
         'summary': 'В админке появились карточки пользователей, транзакции и общая статистика по USD.',
@@ -45,19 +38,18 @@ DEFAULT_NEWS = [
     {
         'id': 3,
         'title': 'История транзакций обновлена',
-        'summary': 'Каждый пользователь видит свои операции с направлением и суммой в долларах.',
+        'summary': 'Каждый пользователь видит свои операции с направлением и суммой.',
         'date': '2026-02-02',
         'category': 'Transactions'
     },
     {
         'id': 4,
         'title': 'Студенческая команда готовит публичный демо-день',
-        'summary': 'Команда Aggregator тестирует сценарии входа, депозита и обмена токенов.',
+        'summary': 'Aggregator тестируется на сценариях входа, депозита и обмена токенов.',
         'date': '2026-01-31',
         'category': 'Team'
     },
 ]
-
 def is_admin_email(email):
     return (email or '').strip().lower() in [e.lower() for e in ADMIN_EMAILS]
 
@@ -261,13 +253,10 @@ try:
 finally:
     _bootstrap_db.close()
 
-
-# ============================================
 # Jupiter API Proxy Views
-# ============================================
 
 class SearchTokenView(View):
-    """Proxy for Jupiter token search API"""
+    #Proxy for Jupiter token search API
     
     def get(self, request):
         query = request.GET.get('query', '')
@@ -287,7 +276,7 @@ class SearchTokenView(View):
 
 
 class ShieldView(View):
-    """Proxy for Jupiter Shield API - token warnings"""
+    #Proxy for Jupiter Shield API - token warnings
     
     def get(self, request):
         mints = request.GET.get('mints', '')
@@ -307,7 +296,7 @@ class ShieldView(View):
 
 
 class OrderView(View):
-    """Proxy for Jupiter Order API - get swap quote"""
+    #Proxy for Jupiter Order API - get swap quote
     
     def get(self, request):
         input_mint = request.GET.get('inputMint')
@@ -342,7 +331,7 @@ class OrderView(View):
 
 @method_decorator(csrf_exempt, name='dispatch')
 class ExecuteView(View):
-    """Proxy for Jupiter Execute API - execute swap"""
+    #Proxy for Jupiter Execute API - execute swap
     
     def post(self, request):
         try:
@@ -372,7 +361,7 @@ class ExecuteView(View):
 
 
 class HoldingsView(View):
-    """Proxy for Jupiter Holdings API - wallet balances"""
+    #Proxy for Jupiter Holdings API - wallet balances
     
     def get(self, request, address):
         if not address:
@@ -387,14 +376,11 @@ class HoldingsView(View):
         except requests.RequestException as e:
             return JsonResponse({'error': str(e)}, status=500)
 
-
-# ============================================
 # Authentication Views
-# ============================================
 
 @method_decorator(csrf_exempt, name='dispatch')
 class RegisterView(View):
-    """User registration endpoint"""
+    #User registration endpoint
     
     def post(self, request):
         try:
@@ -422,11 +408,9 @@ class RegisterView(View):
                 db.commit()
                 db.refresh(user)
                 
-                # Give starter balances to every new user
                 ensure_user_balances(db, user.id, is_admin=is_admin_email(user.email))
                 db.commit()
                 
-                # Generate token
                 token = create_token(user.id, user.email)
                 
                 return JsonResponse({
@@ -448,9 +432,7 @@ class RegisterView(View):
 
 
 @method_decorator(csrf_exempt, name='dispatch')
-class LoginView(View):
-    """User login endpoint"""
-    
+class LoginView(View):    
     def post(self, request):
         try:
             data = json.loads(request.body)
@@ -489,9 +471,7 @@ class LoginView(View):
             return JsonResponse({'error': str(e)}, status=500)
 
 
-class MeView(View):
-    """Get current user info"""
-    
+class MeView(View):    
     @login_required
     def get(self, request):
         db = SessionLocal()
@@ -510,12 +490,10 @@ class MeView(View):
             db.close()
 
 
-# ============================================
 # Wallet Views
-# ============================================
 
 class WalletBalanceView(View):
-    """Get user's wallet balances"""
+    #Get user's wallet balances
     
     @login_required
     def get(self, request):
@@ -541,7 +519,7 @@ class WalletBalanceView(View):
 
 @method_decorator(csrf_exempt, name='dispatch')
 class DepositView(View):
-    """Deposit tokens to user's wallet"""
+    #Deposit tokens to user's wallet
     
     @login_required
     def post(self, request):
@@ -610,14 +588,11 @@ class DepositView(View):
         except Exception as e:
             return JsonResponse({'error': str(e)}, status=500)
 
-
-# ============================================
 # Swap Views
-# ============================================
 
 @method_decorator(csrf_exempt, name='dispatch')
 class SwapView(View):
-    """Execute a mock swap - validate balances locally, use Jupiter for quotes"""
+    #Execute a mock swap - validate balances locally, use Jupiter for quotes
     
     @login_required
     def post(self, request):
@@ -696,7 +671,6 @@ class SwapView(View):
                 rate = output_amount / input_amount if input_amount > 0 else 0
                 fee = 0.3  # 0.3% fee
                 
-                # Execute swap - update balances
                 source_wallet.balance -= input_amount
                 dest_wallet.balance += output_amount
                 
@@ -736,7 +710,7 @@ class SwapView(View):
 
 
 class TransactionListView(View):
-    """Get user's transaction history"""
+    #Get user's transaction history
     
     @login_required
     def get(self, request):
@@ -752,13 +726,10 @@ class TransactionListView(View):
         finally:
             db.close()
 
-
-# ============================================
 # News + Admin Views
-# ============================================
 
 class NewsListView(View):
-    """Public news feed."""
+    #Public news feed
 
     def get(self, request):
         db = SessionLocal()
@@ -771,7 +742,7 @@ class NewsListView(View):
 
 
 class AdminOverviewView(View):
-    """Overall transaction stats for admin profile."""
+    #Overall transaction stats for admin profile
 
     @login_required
     def get(self, request):
@@ -805,7 +776,7 @@ class AdminOverviewView(View):
 
 
 class AdminProfilesView(View):
-    """Admin list of up to 25 user profiles with stats."""
+    #Admin list of up to 25 user profiles with stats
 
     @login_required
     def get(self, request):
@@ -830,7 +801,7 @@ class AdminProfilesView(View):
 
 
 class AdminTransactionsView(View):
-    """Admin view for all users transactions."""
+    #Admin view for all users transactions
 
     @login_required
     def get(self, request):
@@ -862,7 +833,7 @@ class AdminTransactionsView(View):
 
 @method_decorator(csrf_exempt, name='dispatch')
 class AdminNewsView(View):
-    """Admin news manager: GET list, POST create."""
+    #Admin news manager: GET list, POST create
 
     @login_required
     def get(self, request):
@@ -914,7 +885,7 @@ class AdminNewsView(View):
 
 @method_decorator(csrf_exempt, name='dispatch')
 class AdminNewsDeleteView(View):
-    """Admin news manager: DELETE item."""
+    #Admin news manager: DELETE item
 
     @login_required
     def delete(self, request, news_id):
@@ -936,13 +907,10 @@ class AdminNewsDeleteView(View):
         finally:
             db.close()
 
-
-# ============================================
 # Price Data View
-# ============================================
 
 class PriceHistoryView(View):
-    """Get token price history for charts - uses CoinGecko API"""
+    #Get token price history for charts - uses CoinGecko API
     
     COINGECKO_IDS = {
         'SOL': 'solana',
@@ -954,10 +922,8 @@ class PriceHistoryView(View):
     
     def get(self, request, token):
         days = request.GET.get('days', '1')  # 1, 7, 30, 365
-        
         # Map token symbol to CoinGecko ID
         coingecko_id = self.COINGECKO_IDS.get(token.upper(), 'solana')
-        
         try:
             response = requests.get(
                 f'https://api.coingecko.com/api/v3/coins/{coingecko_id}/market_chart',
@@ -968,10 +934,8 @@ class PriceHistoryView(View):
                 timeout=10
             )
             data = response.json()
-            
             # Extract price data
             prices = data.get('prices', [])
-            
             return JsonResponse({
                 'token': token.upper(),
                 'prices': prices,  # [[timestamp, price], ...]
@@ -982,19 +946,13 @@ class PriceHistoryView(View):
 
 
 class TokenListView(View):
-    """Get list of common tokens for selection"""
-    
+    #Get list of common tokens for selection
     def get(self, request):
         return JsonResponse({'tokens': COMMON_TOKENS})
 
-
-# ============================================
 # Database initialization endpoint (for development)
-# ============================================
-
 class InitDatabaseView(View):
-    """Initialize database tables - development only"""
-    
+    #Initialize database tables - development only
     def get(self, request):
         db = SessionLocal()
         try:
