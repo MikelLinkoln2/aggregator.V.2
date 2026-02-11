@@ -1,11 +1,7 @@
-"""
-API Views - Jupiter API Proxy + Authentication, Wallet, and Swap endpoints
-"""
 import json
 import os
 import random
 from datetime import datetime, timedelta
-
 import requests
 from django.http import JsonResponse
 from django.views import View
@@ -13,14 +9,9 @@ from django.conf import settings
 from django.views.decorators.csrf import csrf_exempt
 from django.utils.decorators import method_decorator
 from sqlalchemy import func
-
 from .database import SessionLocal, init_db
 from .models import User, Wallet, Transaction, TransactionStatus, NewsPost, COMMON_TOKENS
-from .auth import (
-    hash_password, verify_password, create_token,
-    login_required
-)
-
+from .auth import hash_password, verify_password, create_token, login_required
 
 JUPITER_API_URL = getattr(settings, 'JUPITER_API_URL', 'https://lite-api.jup.ag')
 ADMIN_EMAIL = os.environ.get('AGGREGATOR_ADMIN_EMAIL', 'admin@aggregator.local').lower()
@@ -67,11 +58,8 @@ DEFAULT_NEWS = [
     },
 ]
 
-
 def is_admin_email(email):
-    """Check if email belongs to an admin user."""
     return (email or '').strip().lower() in [e.lower() for e in ADMIN_EMAILS]
-
 
 def _admin_guard(request):
     if not is_admin_email(getattr(request, 'user_email', '')):
@@ -81,20 +69,16 @@ def _admin_guard(request):
         )
     return None
 
-
 def _price_for_symbol(symbol):
     return TOKEN_PRICE_USD.get((symbol or '').upper(), 1.0)
-
 
 def _estimate_tx_usd(tx):
     if tx.usd_value is not None and tx.usd_value > 0:
         return float(tx.usd_value)
     return float(tx.from_amount or 0) * _price_for_symbol(tx.from_token_symbol)
 
-
 def _wallet_usd(wallet):
     return float(wallet.balance or 0) * _price_for_symbol(wallet.token_symbol)
-
 
 STARTER_BALANCES = {
     'SOL': 1.5,
@@ -103,7 +87,6 @@ STARTER_BALANCES = {
     'BONK': 20000.0,
     'JUP': 25.0,
 }
-
 
 def _ensure_wallet(db, user_id, token, balance):
     wallet = db.query(Wallet).filter(
@@ -123,25 +106,19 @@ def _ensure_wallet(db, user_id, token, balance):
         db.add(wallet)
     return wallet
 
-
 def ensure_user_balances(db, user_id, is_admin=False):
-    """Make sure user has non-zero wallets. Keep logic intentionally simple."""
     for token in COMMON_TOKENS:
         wallet = _ensure_wallet(db, user_id, token, balance=0.0)
         if is_admin:
-            # Admin has exactly fake 10k dollars in USDC for demo swaps.
             wallet.balance = 10000.0 if token['symbol'] == 'USDC' else 0.0
             continue
-
         target_balance = STARTER_BALANCES.get(token['symbol'], 10.0)
         if wallet.balance < target_balance:
             wallet.balance = float(target_balance)
 
-
 def ensure_news_seed(db):
     if db.query(NewsPost).count() > 0:
         return
-
     for item in DEFAULT_NEWS:
         post = NewsPost(
             title=item['title'],
@@ -152,7 +129,6 @@ def ensure_news_seed(db):
         )
         db.add(post)
     db.commit()
-
 
 def _log_user_transaction(db, user_id, from_token, to_token, from_amount, to_amount, usd_value):
     tx = Transaction(
@@ -171,37 +147,28 @@ def _log_user_transaction(db, user_id, from_token, to_token, from_amount, to_amo
     )
     db.add(tx)
 
-
 def ensure_demo_data(db):
-    """Create admin + 25 demo profiles with transactions for local demo."""
     randomizer = random.Random(42)
-
-    # Create primary admin user
     admin_user = db.query(User).filter(User.email == ADMIN_EMAIL).first()
     if not admin_user:
         admin_user = User(email=ADMIN_EMAIL, password_hash=hash_password(ADMIN_PASSWORD))
         db.add(admin_user)
         db.commit()
         db.refresh(admin_user)
-
     ensure_user_balances(db, admin_user.id, is_admin=True)
     db.commit()
 
-    # Create daniyar admin user
     daniyar_user = db.query(User).filter(User.email == DANIYAR_ADMIN_EMAIL).first()
     if not daniyar_user:
         daniyar_user = User(email=DANIYAR_ADMIN_EMAIL, password_hash=hash_password(DANIYAR_ADMIN_PASSWORD))
         db.add(daniyar_user)
         db.commit()
         db.refresh(daniyar_user)
-
     ensure_user_balances(db, daniyar_user.id, is_admin=True)
     db.commit()
 
     profile_count = db.query(User).filter(~User.email.in_(ADMIN_EMAILS)).count()
     to_create = max(0, TARGET_DEMO_PROFILES - profile_count)
-
-    # Build deterministic list of new student users
     created = 0
     next_idx = 1
     while created < to_create:
@@ -209,13 +176,11 @@ def ensure_demo_data(db):
         next_idx += 1
         if db.query(User).filter(User.email == email).first():
             continue
-
         user = User(email=email, password_hash=hash_password('student123'))
         db.add(user)
         db.commit()
         db.refresh(user)
 
-        # Give each demo user all common tokens with small starting balance
         for token in COMMON_TOKENS:
             balance = round(randomizer.uniform(1, 25), 4)
             if token['symbol'] in ('USDC', 'USDT'):
@@ -225,20 +190,17 @@ def ensure_demo_data(db):
                 wallet.balance = balance
         db.commit()
 
-        # Add 2-5 demo transactions
         tx_count = randomizer.randint(2, 5)
         for _ in range(tx_count):
             from_token, to_token = randomizer.sample(COMMON_TOKENS, 2)
             from_symbol = from_token['symbol']
             to_symbol = to_token['symbol']
-
             if from_symbol in ('USDC', 'USDT'):
                 from_amount = round(randomizer.uniform(25, 400), 2)
             elif from_symbol == 'BONK':
                 from_amount = round(randomizer.uniform(15000, 800000), 2)
             else:
                 from_amount = round(randomizer.uniform(0.1, 8), 4)
-
             usd_value = round(from_amount * _price_for_symbol(from_symbol), 2)
             to_amount = round(max(0.000001, usd_value / _price_for_symbol(to_symbol) * randomizer.uniform(0.985, 1.015)), 6)
             created_at = datetime.utcnow() - timedelta(
@@ -246,7 +208,6 @@ def ensure_demo_data(db):
                 hours=randomizer.randint(0, 23),
                 minutes=randomizer.randint(0, 59)
             )
-
             transaction = Transaction(
                 user_id=user.id,
                 from_token_mint=from_token['mint'],
@@ -263,18 +224,14 @@ def ensure_demo_data(db):
                 created_at=created_at
             )
             db.add(transaction)
-
         db.commit()
         created += 1
 
-    # Existing users also must have balances
     all_users = db.query(User).all()
     for user in all_users:
         ensure_user_balances(db, user.id, is_admin=is_admin_email(user.email))
     db.commit()
-
     ensure_news_seed(db)
-
 
 def _user_stats(db, user):
     wallets = db.query(Wallet).filter(Wallet.user_id == user.id).all()
