@@ -5,10 +5,6 @@
 
 const API_BASE = '/api';
 
-// ============================================
-// State Management
-// ============================================
-
 const state = {
     isAuthenticated: false,
     user: null,
@@ -67,9 +63,7 @@ const COMMON_TOKENS = [
     }
 ];
 
-// ============================================
 // Utility Functions
-// ============================================
 
 function showToast(message, type = 'info') {
     const container = document.getElementById('toastContainer');
